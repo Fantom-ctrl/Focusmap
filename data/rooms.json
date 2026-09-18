@@ -1,0 +1,6 @@
+[
+  { "id": 1, "number": "101", "building": 1, "x": 15, "y": 25, "status": "quiet",  "seats": 4, "sockets": true,  "wifi": true  },
+  { "id": 2, "number": "105", "building": 1, "x": 30, "y": 25, "status": "noisy",  "seats": 0, "sockets": true,  "wifi": true  },
+  { "id": 3, "number": "203", "building": 1, "x": 45, "y": 40, "status": "busy",   "seats": 0, "sockets": false, "wifi": true  },
+  { "id": 4, "number": "312", "building": 1, "x": 60, "y": 55, "status": "quiet",  "seats": 6, "sockets": true,  "wifi": false }
+]

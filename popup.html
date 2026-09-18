@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <h1>🎯 FocusMap НГУ</h1>
+    
+    <!-- Форма входа/регистрации -->
+    <div id="auth-section">
+      <input type="email" id="email" placeholder="Email (например, student@nsu.ru)" class="input-field">
+      <input type="password" id="password" placeholder="Пароль (минимум 6 символов)" class="input-field">
+      <input type="text" id="nickname" placeholder="Никнейм (например, Иван_305)" class="input-field">
+      
+      <button id="login-btn" class="btn">Войти</button>
+      <button id="register-btn" class="btn btn-secondary">Зарегистрироваться</button>
+      
+      <p id="auth-error" class="error-message"></p>
+    </div>
+
+    <div id="main-section" style="display: none;">
+      <div class="user-info">
+        <div class="user-profile">
+          <div class="user-name" id="user-nickname">Студент</div>
+          <div class="user-rating">
+            <span class="rating-stars">⭐</span>
+            <span class="rating-value" id="user-reputation">5.00</span>
+            <span class="rating-max">/ 5.00</span>
+          </div>
+          <div class="user-stats">
+            <span class="stat">Голосов: <strong id="total-votes">0</strong></span>
+            <span class="stat">Точность: <strong id="accuracy">100%</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <label class="toggle-row">
+        <span>Включить на карте</span>
+        <input type="checkbox" id="toggle" checked>
+        <span class="slider"></span>
+      </label>
+
+      <button id="refresh" class="btn">🔄 Обновить карту</button>
+
+      <div class="section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <label class="toggle-row">
+          <span> Режим добавления</span>
+          <input type="checkbox" id="add_mode">
+          <span class="slider"></span>
+        </label>
+        <p style="font-size: 11px; color: #6b7280; margin: 8px 0 0;">Кликайте по карте, чтобы добавить аудитории</p>
+      </div>
+
+      <button id="logout-btn" class="btn btn-secondary" style="margin-top: 12px;">Выйти</button>
+    </div>
+
+    <div class="footer">
+      <span id="status">загрузка...</span>
+    </div>
+  </div>
+  <script src="lib/supabase.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
