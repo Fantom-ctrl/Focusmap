@@ -319,5 +319,42 @@ if (addModeToggle) {
   });
 }
 
+// ==========================================
+// ПЕРЕКЛЮЧАТЕЛЬ "ВКЛЮЧИТЬ НА КАРТЕ"
+// ==========================================
+const toggleSwitch = document.getElementById('toggle');
+
+if (toggleSwitch) {
+  // 1. При открытии popup — читаем сохранённое состояние
+  chrome.storage.local.get(['focusmap_enabled'], (result) => {
+    // По умолчанию включено (true)
+    toggleSwitch.checked = result.focusmap_enabled !== false;
+  });
+
+  // 2. При изменении переключателя — сохраняем и отправляем на карту
+  toggleSwitch.addEventListener('change', (e) => {
+    const isEnabled = e.target.checked;
+    
+    // Сохраняем состояние
+    chrome.storage.local.set({ focusmap_enabled: isEnabled });
+    
+    // Отправляем сообщение на активную вкладку
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0] && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'TOGGLE_MAP_VISIBILITY',
+          enabled: isEnabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('⚠️ Страница карты не открыта');
+          }
+        });
+      }
+    });
+    
+    console.log('[Popup] 🗺️ Карта ' + (isEnabled ? 'включена' : 'выключена'));
+  });
+}
+
 // Запуск
 checkAuth();

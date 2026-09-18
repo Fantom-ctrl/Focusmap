@@ -128,7 +128,7 @@
 
   function renderMarkers() {
     const container = prepareMapContainer();
-    if (!container) { console.warn('[FocusMap] ⚠️ Контейнер карты не найден'); return; }
+    if (!container) { console.warn('[FocusMap] ️ Контейнер карты не найден'); return; }
     document.getElementById('focusmap-overlay')?.remove();
     overlay = document.createElement('div');
     overlay.id = 'focusmap-overlay';
@@ -140,18 +140,27 @@
         const marker = document.createElement('div');
         marker.className = 'focusmap-marker';
         marker.dataset.roomId = room.id;
-        marker.style.cssText = `position: absolute; left: ${room.x}%; top: ${room.y}%; width: 20px; height: 20px; border-radius: 50%; background: ${getStatusColor(room.status)}; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; pointer-events: auto; transition: transform 0.2s;`;
-        marker.title = `Рек. ${room.number}: ${getStatusText(room.status)}`;
+        marker.dataset.isProtected = room.is_protected ? 'true' : 'false';  // ← НОВОЕ
+        
+        // Разный стиль для защищённых точек (двойная рамка)
+        const borderStyle = room.is_protected 
+          ? 'border: 3px double white;' 
+          : 'border: 2px solid white;';
+        
+        marker.style.cssText = `position: absolute; left: ${room.x}%; top: ${room.y}%; width: 20px; height: 20px; border-radius: 50%; background: ${getStatusColor(room.status)}; ${borderStyle} box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; pointer-events: auto; transition: transform 0.2s;`;
+        
+        // Подсказка с иконкой замка для защищённых точек
+        const lockIcon = room.is_protected ? ' 🔒' : '';
+        marker.title = `Рек. ${room.number}: ${getStatusText(room.status)}${lockIcon}`;
+        
         marker.onmouseover = () => marker.style.transform = 'scale(1.3)';
         marker.onmouseout = () => marker.style.transform = 'scale(1)';
         
         marker.onclick = (e) => {
           e.stopPropagation();
           if (addMode) {
-            // В режиме добавления показываем меню действий
-            showMarkerActionsMenu(marker, room.id);
+            showMarkerActionsMenu(marker, room.id, room.is_protected);  // ← передаём флаг
           } else {
-            // В обычном режиме показываем popup голосования
             showRoomPopup(room, marker);
           }
         };
@@ -263,22 +272,72 @@
   }
 
   function getCurrentFloor() {
-    const floorButtons = document.querySelectorAll('button, .btn, [class*="floor"], [class*="этаж"]');
+    // 1. Ищем активную кнопку этажа (красная кнопка на сайте НГУ)
+    const floorButtons = document.querySelectorAll('button, .btn, [class*="floor"], [class*="этаж"], [class*="Этаж"]');
+    
     for (const btn of floorButtons) {
       const style = window.getComputedStyle(btn);
-      const text = btn.textContent.trim();
-      if ((style.backgroundColor.includes('220') || style.backgroundColor.includes('rgb(220') || style.backgroundColor === 'red' || btn.classList.contains('active') || btn.style.backgroundColor === 'red') && text.match(/^\d+\s*(этаж|ЭТАЖ)?$/i)) {
-        return parseInt(text.match(/(\d+)/)[1]);
+      const text = btn.textContent.trim().toLowerCase();
+      
+      // Проверяем на цоколь
+      if (text.includes('цоколь') || text.includes('цоко')) {
+        console.log('[FocusMap] 🎯 Найден цокольный этаж (0)');
+        return 0;
+      }
+      
+      // Проверяем, что кнопка активна (красный фон или выделена)
+      if (
+        (style.backgroundColor.includes('220') || 
+        style.backgroundColor.includes('rgb(220') || 
+        style.backgroundColor === 'red' || 
+        btn.classList.contains('active') ||
+        btn.style.backgroundColor === 'red') &&
+        text.match(/^\d+\s*(этаж)?$/i)
+      ) {
+        const match = text.match(/(\d+)/);
+        if (match) {
+          const floor = parseInt(match[1]);
+          console.log(`[FocusMap] 🎯 Найден активный этаж: ${floor}`);
+          return floor;
+        }
       }
     }
+
+    // 2. Ищем в заголовке страницы
     const headings = document.querySelectorAll('h1, h2, h3, .floor-title, .page-title');
     for (const h of headings) {
-      const match = h.textContent.match(/(\d+)\s*(этаж|ЭТАЖ|floor)/i);
-      if (match) return parseInt(match[1]);
+      const text = h.textContent.toLowerCase();
+      
+      // Проверяем на цоколь
+      if (text.includes('цоколь')) {
+        console.log('[FocusMap] 🎯 Цокольный этаж в заголовке (0)');
+        return 0;
+      }
+      
+      const match = text.match(/(\d+)\s*(этаж|floor)/i);
+      if (match) {
+        console.log(`[FocusMap] 🎯 Найден этаж в заголовке: ${match[1]}`);
+        return parseInt(match[1]);
+      }
     }
-    const floorMatch = document.body.innerHTML.match(/(\d+)\s*ЭТАЖ/i);
-    if (floorMatch) return parseInt(floorMatch[1]);
-    if (document.title.toLowerCase().includes('цоколь')) return 0;
+
+    // 3. Ищем текст "4 ЭТАЖ" или похожий на странице
+    const allText = document.body.innerHTML.toLowerCase();
+    
+    // Проверяем на цоколь
+    if (allText.includes('цоколь')) {
+      console.log('[FocusMap] 🎯 Цокольный этаж в HTML (0)');
+      return 0;
+    }
+    
+    const floorMatch = allText.match(/(\d+)\s*этаж/i);
+    if (floorMatch) {
+      console.log(`[FocusMap] 🎯 Найден этаж в HTML: ${floorMatch[1]}`);
+      return parseInt(floorMatch[1]);
+    }
+
+    // По умолчанию возвращаем 0 (цоколь или 1 этаж)
+    console.warn('[FocusMap] ⚠️ Не удалось определить этаж, используем 0');
     return 0;
   }
 
@@ -298,15 +357,30 @@
   }
 
   async function loadAndRender() {
+    // Проверяем, включена ли карта
+    chrome.storage.local.get(['focusmap_enabled'], (result) => {
+      const isEnabled = result.focusmap_enabled !== false; // По умолчанию включено
+      
+      if (!isEnabled) {
+        console.log('[FocusMap] ️ Карта выключена пользователем');
+        return; // Не загружаем данные и не рисуем маркеры
+      }
+      
+      // Если включено — загружаем и рисуем
+      loadRoomsData();
+    });
+  }
+
+  async function loadRoomsData() {
     currentRooms = await loadRooms();
     renderMarkers();
     createSidebar();
     updateRoomList();
-    updateAddModeUI(); // Обновляем UI режима добавления после перерисовки
+    updateAddModeUI();
   }
 
   // ==========================================
-  // 5. 🔥 РЕЖИМ ДОБАВЛЕНИЯ (СТАБИЛЬНАЯ ВЕРСИЯ)
+  // 5. РЕЖИМ ДОБАВЛЕНИЯ 
   // ==========================================
   function updateAddModeUI() {
     const mapContainer = document.querySelector('#focusmap-overlay')?.parentElement;
@@ -400,69 +474,67 @@
     document.getElementById('new-room-number').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('confirm-add-btn').click(); });
   }
 
-  function showMarkerActionsMenu(marker, roomId) {
-    // 1. Удаляем старое меню, если оно вдруг осталось
-    const existingMenu = document.getElementById('focusmap-marker-menu');
-    if (existingMenu) existingMenu.remove();
-
-    // 2. Создаем новое меню
+  function showMarkerActionsMenu(marker, roomId, isProtected) {
+    if (document.getElementById('focusmap-marker-menu')) return;
+    
     const menu = document.createElement('div');
     menu.id = 'focusmap-marker-menu';
     const rect = marker.getBoundingClientRect();
-    menu.style.cssText = `
-      position: fixed; top: ${rect.bottom + 8}px; left: ${rect.left}px;
-      background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-      padding: 12px; z-index: 100001; font-family: sans-serif; min-width: 180px;
-      animation: popIn 0.2s ease-out;
-    `;
+    menu.style.cssText = `position: fixed; top: ${rect.bottom + 8}px; left: ${rect.left}px; background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); padding: 12px; z-index: 100001; font-family: sans-serif; min-width: 180px; animation: popIn 0.2s ease-out;`;
+    
+    // 🔒 Если точка защищена — показываем только "Переместить"
+    // Если нет — показываем обе кнопки
+    const deleteButtonHtml = isProtected 
+      ? `<button id="delete-marker-btn" disabled style="width: 100%; padding: 10px; background: #9ca3af; color: white; border: none; border-radius: 8px; cursor: not-allowed; font-weight: 500; opacity: 0.6;">🔒 Удаление запрещено</button>`
+      : `<button id="delete-marker-btn" style="width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;"> Удалить</button>`;
     
     menu.innerHTML = `
       <div style="font-weight: bold; margin-bottom: 12px;">Действия:</div>
       <button id="move-marker-btn" style="width: 100%; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 8px; font-weight: 500;">✋ Переместить</button>
-      <button id="delete-marker-btn" style="width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">🗑 Удалить</button>
+      ${deleteButtonHtml}
     `;
     
     document.body.appendChild(menu);
 
-    // 3. Обработчик кнопки "Переместить"
     document.getElementById('move-marker-btn').onclick = (e) => {
-      e.stopPropagation(); // Останавливаем всплытие клика
+      e.stopPropagation();
       menu.remove();
       startDragMode(marker, roomId);
     };
 
-    // 4. Обработчик кнопки "Удалить" (с защитой и логами)
-    document.getElementById('delete-marker-btn').onclick = async (e) => {
-      e.stopPropagation(); // КРИТИЧЕСКИ ВАЖНО: чтобы клик не закрыл меню раньше времени
-      
-      console.log('[FocusMap] 🗑 Попытка удаления. ID рекреаций:', roomId);
-      
-      if (confirm('Вы уверены, что хотите удалить эту рекреацию? Это действие нельзя отменить.')) {
-        try {
-          // Добавляем .select(), чтобы Supabase вернул данные об удаленной строке (подтверждение успеха)
-          const { data, error } = await supabaseClient
-            .from('rooms')
-            .delete()
-            .eq('id', roomId)
-            .select(); 
+    // Обработчик кнопки "Удалить" (только для незащищённых точек)
+    const deleteBtn = document.getElementById('delete-marker-btn');
+    if (!isProtected && deleteBtn) {
+      deleteBtn.onclick = async (e) => {
+        e.stopPropagation();
+        console.log('[FocusMap] 🗑 Попытка удаления. ID:', roomId);
+        
+        if (confirm('Вы уверены, что хотите удалить эту рекреацию?')) {
+          try {
+            const { data, error } = await supabaseClient
+              .from('rooms')
+              .delete()
+              .eq('id', roomId)
+              .select();
 
-          if (error) {
-            console.error('[FocusMap] ❌ Ошибка Supabase при удалении:', error);
-            alert('❌ Ошибка удаления: ' + error.message);
-          } else {
-            console.log('[FocusMap] ✅ Успешно удалено из БД:', data);
-            showNotification('✅ Рекреация удалена');
-            menu.remove();
-            setTimeout(() => loadAndRender(), 500); // Перерисовываем карту через полсекунды
+            if (error) {
+              console.error('[FocusMap] ❌ Ошибка удаления:', error);
+              alert('❌ Ошибка: ' + error.message);
+            } else {
+              console.log('[FocusMap] ✅ Удалено:', data);
+              showNotification('✅ Рекреация удалена');
+              menu.remove();
+              setTimeout(() => loadAndRender(), 500);
+            }
+          } catch (err) {
+            console.error('[FocusMap] ❌ Критическая ошибка:', err);
+            alert('Ошибка: ' + err.message);
           }
-        } catch (err) {
-          console.error('[FocusMap] ❌ Критическая ошибка при удалении:', err);
-          alert('Критическая ошибка: ' + err.message);
         }
-      }
-    };
+      };
+    }
 
-    // 5. Закрытие меню при клике в любое другое место
+    // Закрытие меню по клику вне
     setTimeout(() => {
       const closeHandler = (e) => {
         if (!menu.contains(e.target)) {
@@ -545,6 +617,24 @@
     if (message.type === 'TOGGLE_ADD_MODE') {
       toggleAddMode(message.enabled);
     }
+    
+    if (message.type === 'TOGGLE_MAP_VISIBILITY') {
+      const overlay = document.getElementById('focusmap-overlay');
+      const sidebar = document.getElementById('focusmap-sidebar');
+      
+      if (message.enabled) {
+        // Включаем отображение
+        if (overlay) overlay.style.display = 'block';
+        if (sidebar) sidebar.style.display = 'block';
+        console.log('[FocusMap] ✅ Карта включена');
+      } else {
+        // Выключаем отображение
+        if (overlay) overlay.style.display = 'none';
+        if (sidebar) sidebar.style.display = 'none';
+        console.log('[FocusMap] ⏸️ Карта выключена');
+      }
+    }
+    
     sendResponse({ status: 'ok' });
     return true;
   });
