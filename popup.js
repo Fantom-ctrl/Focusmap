@@ -285,5 +285,39 @@ if (logoutBtn) {
   });
 }
 
+// ==========================================
+// УПРАВЛЕНИЕ РЕЖИМОМ ДОБАВЛЕНИЯ
+// ==========================================
+const addModeToggle = document.getElementById('add_mode');
+
+if (addModeToggle) {
+  // 1. При открытии popup читаем актуальное состояние из хранилища
+  chrome.storage.local.get(['focusmap_add_mode'], (result) => {
+    addModeToggle.checked = result.focusmap_add_mode || false;
+  });
+
+  // 2. При изменении переключателя отправляем команду в content.js
+  addModeToggle.addEventListener('change', (e) => {
+    const isEnabled = e.target.checked;
+    
+    // Сохраняем состояние, чтобы оно не слетало при закрытии popup
+    chrome.storage.local.set({ focusmap_add_mode: isEnabled });
+    
+    // Отправляем сообщение на активную вкладку с картой НГУ
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0] && tabs[0].url && tabs[0].url.includes('nsu.ru')) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'TOGGLE_ADD_MODE',
+          enabled: isEnabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('⚠️ Не удалось связаться со страницей. Обновите карту.');
+          }
+        });
+      }
+    });
+  });
+}
+
 // Запуск
 checkAuth();
