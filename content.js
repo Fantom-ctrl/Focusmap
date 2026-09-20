@@ -241,23 +241,49 @@
   }
 
   async function updateUsersRatings(roomId, votes, finalStatus) {
+    console.log(`[FocusMap] Обновляем рейтинги для рекреаций ${roomId}`);
+    
     for (const vote of votes) {
       const isCorrect = vote.status === finalStatus;
-      let reputationChange = isCorrect ? 0.02 : 0;
-      if (!isCorrect) {
-        const severityDiff = Math.abs(({ quiet: 1, noisy: 2, busy: 3 }[finalStatus] || 1) - ({ quiet: 1, noisy: 2, busy: 3 }[vote.status] || 1));
-        reputationChange = severityDiff === 1 ? -0.10 : -0.25;
+      
+      let reputationChange = 0;
+      if (isCorrect) {
+        reputationChange = 0.02;
+      } else {
+        const finalStatusSeverity = { quiet: 1, noisy: 2, busy: 3 }[finalStatus] || 1;
+        const voteStatusSeverity = { quiet: 1, noisy: 2, busy: 3 }[vote.status] || 1;
+        const severityDiff = Math.abs(finalStatusSeverity - voteStatusSeverity);
+        
+        if (severityDiff === 1) reputationChange = -0.10;
+        else if (severityDiff === 2) reputationChange = -0.25;
       }
       
-      const { data: userData } = await supabaseClient.from('users').select('reputation').eq('id', vote.user_id).single();
-      const newReputation = Math.max(0.00, Math.min(5.00, (userData?.reputation || 5.00) + reputationChange));
+      // Получаем текущие данные пользователя
+      const { data: userData } = await supabaseClient
+        .from('users')
+        .select('reputation, total_votes, correct_votes')
+        .eq('id', vote.user_id)
+        .single();
       
-      await supabaseClient.from('users').update({ 
-        reputation: newReputation,
-        total_votes: supabase.raw('total_votes + 1'),
-        correct_votes: supabase.raw(`correct_votes + ${isCorrect ? 1 : 0}`)
-      }).eq('id', vote.user_id);
+      if (!userData) continue;
+      
+      const newReputation = Math.max(0.00, Math.min(5.00, 
+        (userData.reputation || 5.00) + reputationChange));
+      const newTotalVotes = (userData.total_votes || 0) + 1;
+      const newCorrectVotes = (userData.correct_votes || 0) + (isCorrect ? 1 : 0);
+      
+      // Обновляем ВСЕ три поля обычным запросом (без raw)
+      await supabaseClient
+        .from('users')
+        .update({ 
+          reputation: newReputation,
+          total_votes: newTotalVotes,
+          correct_votes: newCorrectVotes
+        })
+        .eq('id', vote.user_id);
     }
+    
+    console.log(`[FocusMap] Рейтинги обновлены`);
   }
 
   // ==========================================
